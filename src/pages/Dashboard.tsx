@@ -8,7 +8,7 @@ import { db } from '../firebase';
 import { GoogleGenAI, Type } from '@google/genai';
 import TicketBuilder from '../components/TicketBuilder';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: "AIzaSyDMmAGLDbcW9mgTu_UnTmZSqQwkKJA0www" });
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
