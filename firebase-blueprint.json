@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the AI BetMaster app.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique ID." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "displayName": { "type": "string", "description": "The user's display name." },
+        "photoURL": { "type": "string", "description": "The user's profile photo URL." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created." }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "Prediction": {
+      "title": "Prediction",
+      "description": "An AI-generated sports betting prediction.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID for the prediction." },
+        "sport": { "type": "string", "description": "The sport (e.g., Football, Basketball)." },
+        "match": { "type": "string", "description": "The teams playing." },
+        "prediction": { "type": "string", "description": "The predicted outcome." },
+        "probability": { "type": "number", "description": "The estimated probability of the outcome (0-100)." },
+        "odds": { "type": "number", "description": "The decimal odds for the prediction." },
+        "date": { "type": "string", "format": "date-time", "description": "The date of the match." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the prediction was generated." }
+      },
+      "required": ["id", "sport", "match", "prediction", "probability", "odds", "date", "createdAt"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "A betting ticket generated for a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID for the ticket." },
+        "userId": { "type": "string", "description": "The ID of the user who generated the ticket." },
+        "budget": { "type": "number", "description": "The user's budget for the ticket." },
+        "targetProfit": { "type": "number", "description": "The user's target profit." },
+        "riskLevel": { "type": "string", "enum": ["low", "medium", "high"], "description": "The selected risk level." },
+        "totalOdds": { "type": "number", "description": "The combined odds of the ticket." },
+        "estimatedReturn": { "type": "number", "description": "The estimated return if the ticket wins." },
+        "selections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "match": { "type": "string" },
+              "prediction": { "type": "string" },
+              "odds": { "type": "number" },
+              "probability": { "type": "number" }
+            },
+            "required": ["match", "prediction", "odds", "probability"]
+          },
+          "description": "The individual bets in the ticket."
+        },
+        "status": { "type": "string", "enum": ["pending", "won", "lost"], "description": "The status of the ticket." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the ticket was generated." }
+      },
+      "required": ["id", "userId", "budget", "targetProfit", "riskLevel", "totalOdds", "estimatedReturn", "selections", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/predictions/{predictionId}": {
+      "schema": { "$ref": "#/entities/Prediction" },
+      "description": "Stores global AI predictions."
+    },
+    "/tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/Ticket" },
+      "description": "Stores user-generated betting tickets."
+    }
+  }
+}

@@ -1,0 +1,170 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required) - The user's unique ID.
+    //   - email: string (required) - The user's email address.
+    //   - displayName: string (optional) - The user's display name.
+    //   - photoURL: string (optional) - The user's profile photo URL.
+    //   - createdAt: timestamp (required) - When the user was created.
+    //
+    // Collection: predictions
+    // Document ID: {predictionId}
+    // Fields:
+    //   - id: string (required)
+    //   - sport: string (required)
+    //   - match: string (required)
+    //   - prediction: string (required)
+    //   - probability: number (required)
+    //   - odds: number (required)
+    //   - date: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: tickets
+    // Document ID: {ticketId}
+    // Fields:
+    //   - id: string (required)
+    //   - userId: string (required)
+    //   - budget: number (required)
+    //   - targetProfit: number (required)
+    //   - riskLevel: string (required)
+    //   - totalOdds: number (required)
+    //   - estimatedReturn: number (required)
+    //   - selections: list (required)
+    //   - status: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function userIdUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function userIdNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.email is string && isValidEmail(data.email) && data.email.size() < 150 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidPrediction(data) {
+      return hasOnlyAllowedFields(['id', 'sport', 'match', 'prediction', 'probability', 'odds', 'date', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.sport is string && data.sport.size() > 0 && data.sport.size() < 50 &&
+             data.match is string && data.match.size() > 0 && data.match.size() < 200 &&
+             data.prediction is string && data.prediction.size() > 0 && data.prediction.size() < 200 &&
+             data.probability is number && data.probability >= 0 && data.probability <= 100 &&
+             data.odds is number && data.odds >= 1 &&
+             data.date is string && data.date.size() > 0 && data.date.size() < 50 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidSelection(selection) {
+      return selection is map &&
+             selection.keys().hasOnly(['match', 'prediction', 'odds', 'probability']) &&
+             selection.match is string && selection.match.size() > 0 && selection.match.size() < 200 &&
+             selection.prediction is string && selection.prediction.size() > 0 && selection.prediction.size() < 200 &&
+             selection.odds is number && selection.odds >= 1 &&
+             selection.probability is number && selection.probability >= 0 && selection.probability <= 100;
+    }
+
+    function isValidSelectionsList(selections) {
+      return selections is list && selections.size() > 0 && selections.size() <= 20;
+    }
+
+    function isValidTicket(data) {
+      return hasOnlyAllowedFields(['id', 'userId', 'budget', 'targetProfit', 'riskLevel', 'totalOdds', 'estimatedReturn', 'selections', 'status', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.budget is number && data.budget > 0 &&
+             data.targetProfit is number && data.targetProfit > 0 &&
+             data.riskLevel in ['low', 'medium', 'high'] &&
+             data.totalOdds is number && data.totalOdds >= 1 &&
+             data.estimatedReturn is number && data.estimatedReturn > 0 &&
+             isValidSelectionsList(data.selections) &&
+             data.status in ['pending', 'won', 'lost'] &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged();
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && uidNotModified() && areImmutableFieldsUnchanged(['createdAt']);
+      allow delete: if false; // Users cannot delete their own profile directly
+    }
+
+    match /predictions/{predictionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidPrediction(request.resource.data);
+      allow update: if false; // Predictions are immutable once created
+      allow delete: if false;
+    }
+
+    match /tickets/{ticketId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidTicket(request.resource.data) && userIdUnchanged();
+      allow update: if isAuthenticated() && isDocOwner() && isValidTicket(request.resource.data) && userIdNotModified() && areImmutableFieldsUnchanged(['createdAt', 'budget', 'targetProfit', 'riskLevel', 'selections']);
+      allow delete: if isAuthenticated() && isDocOwner();
+    }
+  }
+}
